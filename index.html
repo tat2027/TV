@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NovaStream</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap');
+  html, body { margin: 0; background: #0B0B0E; }
+  ::-webkit-scrollbar { display: none; }
+  .flex{display:flex} .items-center{align-items:center} .justify-between{justify-content:space-between}
+  .justify-center{justify-content:center} .flex-shrink-0{flex-shrink:0} .overflow-x-auto{overflow-x:auto}
+  .pb-2{padding-bottom:0.5rem} .px-6{padding-left:1.5rem;padding-right:1.5rem} .py-4{padding-top:1rem;padding-bottom:1rem}
+  .mb-8{margin-bottom:2rem} .hidden{display:none}
+  .gap-1{gap:0.25rem} .gap-2{gap:0.5rem} .gap-3{gap:0.75rem} .gap-4{gap:1rem} .gap-5{gap:1.25rem} .gap-8{gap:2rem}
+  @media (min-width:768px){ .md-flex{display:flex} }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect } = React;
+
+// ==== apna GitHub raw channels.json URL yahan daalo ====
+const CHANNELS_URL = "https://raw.githubusercontent.com/tat2027/Code/refs/heads/main/data/channels.json";
+
+const C = {
+  bg: "#0B0B0E", surface: "#17171C", surface2: "#1F1F26",
+  text: "#F5F5F2", textDim: "#9A9AA5", accent: "#E63946", gold: "#F2B705",
+};
+const display = { fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" };
+const mono = { fontFamily: "'JetBrains Mono', monospace" };
+const body = { fontFamily: "'Inter', sans-serif" };
+
+const SAMPLE_VIDEO = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+const Icon = ({ children, size = 18, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
+);
+const Play = ({ size = 18, color = "currentColor", fill = "none" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={fill === "none" ? color : "none"} strokeWidth="2"><polygon points="6,4 20,12 6,20" /></svg>
+);
+const Pause = (p) => <Icon {...p}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></Icon>;
+const Info = (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="7.5" r="0.6" fill={p.color||"currentColor"}/></Icon>;
+const Search = (p) => <Icon {...p}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></Icon>;
+const Bell = (p) => <Icon {...p}><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 004 0"/></Icon>;
+const ChevronDown = (p) => <Icon {...p}><polyline points="6,9 12,15 18,9"/></Icon>;
+const Radio = (p) => <Icon {...p}><circle cx="12" cy="12" r="2.2"/><path d="M7 9a7 7 0 000 6M17 9a7 7 0 010 6M4 6a11 11 0 000 12M20 6a11 11 0 010 12"/></Icon>;
+const Star = ({ size = 18, color = "currentColor", fill = "none" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth="1.5"><polygon points="12,2 15,9 22,9.5 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9.5 9,9"/></svg>
+);
+const Volume2 = (p) => <Icon {...p}><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a5 5 0 010 8"/><path d="M19.5 5.5a9 9 0 010 13"/></Icon>;
+const VolumeX = (p) => <Icon {...p}><path d="M4 9v6h4l5 4V5L8 9H4z"/><line x1="17" y1="9" x2="22" y2="14"/><line x1="22" y1="9" x2="17" y2="14"/></Icon>;
+const Maximize2 = (p) => <Icon {...p}><polyline points="15,4 20,4 20,9"/><polyline points="9,20 4,20 4,15"/><line x1="20" y1="4" x2="14" y2="10"/><line x1="4" y1="20" x2="10" y2="14"/></Icon>;
+const ArrowLeft = (p) => <Icon {...p}><line x1="20" y1="12" x2="4" y2="12"/><polyline points="10,6 4,12 10,18"/></Icon>;
+const SkipBack = (p) => <Icon {...p}><polygon points="19,4 19,20 8,12"/><line x1="5" y1="4" x2="5" y2="20"/></Icon>;
+const SkipForward = (p) => <Icon {...p}><polygon points="5,4 5,20 16,12"/><line x1="19" y1="4" x2="19" y2="20"/></Icon>;
+const X = (p) => <Icon {...p}><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></Icon>;
+
+const continueWatching = [
+  { title: "Crimson Horizon", progress: 62, tag: "S2 · E4" },
+  { title: "Nightfall Protocol", progress: 30, tag: "Movie" },
+  { title: "The Long Signal", progress: 85, tag: "S1 · E9" },
+  { title: "Paper Lanterns", progress: 12, tag: "Movie" },
+];
+const defaultChannels = [
+  { name: "Apex Sports", number: "104", viewers: "12.3K", genre: "Football" },
+  { name: "Horizon News", number: "201", viewers: "4.1K", genre: "News" },
+  { name: "Cine Prime", number: "310", viewers: "8.7K", genre: "Movies" },
+  { name: "Kidz Loop", number: "415", viewers: "2.9K", genre: "Kids" },
+  { name: "Arena HD", number: "108", viewers: "19.5K", genre: "Cricket" },
+];
+const trending = [
+  { title: "Crimson Horizon", meta: "Drama · 2026" },
+  { title: "Iron Meridian", meta: "Action · 2025" },
+  { title: "Salt & Static", meta: "Thriller · 2026" },
+  { title: "The Long Signal", meta: "Sci-Fi · 2024" },
+  { title: "Paper Lanterns", meta: "Romance · 2026" },
+  { title: "Glasshouse", meta: "Mystery · 2025" },
+];
+const kidsZone = [
+  { title: "Bubble Town", meta: "Animated" },
+  { title: "Sir Waddles", meta: "Animated" },
+  { title: "Tiny Explorers", meta: "Educational" },
+  { title: "Moonlit Friends", meta: "Animated" },
+];
+
+function gradientFor(seed) {
+  const palettes = [["#3A0CA3","#7209B7"],["#1D3557","#457B9D"],["#6A040F","#9D0208"],["#014F86","#2C7DA0"],["#582F0E","#A4611E"],["#3D0B37","#7B2D6E"]];
+  const p = palettes[seed % palettes.length];
+  return `linear-gradient(135deg, ${p[0]}, ${p[1]})`;
+}
+function fmtTime(s) {
+  if (!isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
+function LiveBadgeNumber({ number }) {
+  return (
+    <div style={{ ...mono, background: "#0B0B0E", color: C.gold, fontSize: "13px", padding: "2px 7px", borderRadius: "3px", border: `1px solid ${C.gold}55`, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05)", display: "inline-block" }}>
+      CH {number}
+    </div>
+  );
+}
+
+function PosterCard({ title, meta, seed, live, number, progress, onPlay }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} onClick={onPlay} className="flex-shrink-0"
+      style={{ width: "168px", cursor: "pointer", transform: hover ? "translateY(-6px) scale(1.04)" : "none", transition: "transform 180ms ease" }}>
+      <div style={{ height: "94px", borderRadius: "6px", background: gradientFor(seed), position: "relative", overflow: "hidden", boxShadow: hover ? "0 10px 24px rgba(0,0,0,0.5)" : "0 2px 6px rgba(0,0,0,0.3)" }}>
+        {live && (
+          <div style={{ position: "absolute", top: 6, left: 6, display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.accent, boxShadow: `0 0 6px ${C.accent}` }} />
+            <span style={{ ...mono, fontSize: "10px", color: C.text, letterSpacing: "0.05em" }}>LIVE</span>
+          </div>
+        )}
+        {live && <div style={{ position: "absolute", bottom: 6, left: 6 }}><LiveBadgeNumber number={number || "—"} /></div>}
+        {typeof progress === "number" && (
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "3px", background: "#00000055" }}>
+            <div style={{ width: `${progress}%`, height: "100%", background: C.accent }} />
+          </div>
+        )}
+        {hover && (
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Play size={22} color={C.text} fill={C.text} />
+          </div>
+        )}
+      </div>
+      <div style={{ ...body, marginTop: "6px" }}>
+        <div style={{ color: C.text, fontSize: "12.5px", fontWeight: 600, lineHeight: 1.2 }}>{title}</div>
+        <div style={{ color: C.textDim, fontSize: "11px", marginTop: "2px" }}>{meta}</div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ title, children }) {
+  return (
+    <div className="mb-8">
+      <h3 style={{ ...display, color: C.text, fontSize: "20px", marginBottom: "10px", paddingLeft: "4px" }}>{title}</h3>
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", paddingLeft: "4px" }}>{children}</div>
+    </div>
+  );
+}
+
+function Player({ item, onClose, onSwitchChannel }) {
+  const videoRef = useRef(null);
+  const containerRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setLoadError(false);
+    const src = (item.live && item.url) ? item.url : SAMPLE_VIDEO;
+    let hls;
+    if (src.endsWith(".m3u8")) {
+      if (window.Hls && window.Hls.isSupported()) {
+        hls = new window.Hls();
+        hls.loadSource(src);
+        hls.attachMedia(v);
+        hls.on(window.Hls.Events.ERROR, (_, data) => { if (data.fatal) setLoadError(true); });
+      } else if (v.canPlayType("application/vnd.apple.mpegurl")) {
+        v.src = src;
+      } else {
+        setLoadError(true);
+      }
+    } else {
+      v.src = src;
+    }
+    v.play().catch(() => {});
+    return () => { if (hls) hls.destroy(); };
+  }, [item?.name, item?.title, item?.url]);
+
+  const togglePlay = () => {
+    const v = videoRef.current; if (!v) return;
+    if (v.paused) { v.play(); setIsPlaying(true); } else { v.pause(); setIsPlaying(false); }
+  };
+  const toggleMute = () => { const v = videoRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted); };
+  const toggleFullscreen = () => {
+    const el = containerRef.current; if (!el) return;
+    if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
+  };
+  const seek = (e) => {
+    const v = videoRef.current; if (!v || item.live) return;
+    const val = Number(e.target.value); v.currentTime = val; setCurrent(val);
+  };
+  const label = item.live ? item.name : item.title;
+
+  return (
+    <div ref={containerRef} style={{ position: "fixed", inset: 0, background: "#000", zIndex: 50 }}>
+      <video ref={videoRef} autoPlay muted={muted} loop={!item.live}
+        onTimeUpdate={(e) => setCurrent(e.target.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.target.duration)}
+        onClick={togglePlay}
+        style={{ width: "100%", height: "100%", objectFit: "contain", cursor: "pointer" }} />
+
+      {loadError && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: C.textDim, ...body, fontSize: "13px", textAlign: "center", padding: "0 20px" }}>
+          Stream link nahi chal saka. Sample clip chal raha hai.
+        </div>
+      )}
+
+      <div className="flex items-center justify-between" style={{ position: "absolute", top: 0, left: 0, right: 0, padding: "18px 24px", background: "linear-gradient(180deg, rgba(0,0,0,0.75), transparent)" }}>
+        <div className="flex items-center gap-4">
+          <button onClick={onClose} style={{ color: C.text, background: "none", border: "none" }}><ArrowLeft size={22} /></button>
+          <div>
+            <div style={{ ...display, fontSize: "22px", color: C.text }}>{label}</div>
+            {item.live && (
+              <div className="flex items-center gap-2" style={{ marginTop: "2px" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.accent }} />
+                <span style={{ ...mono, fontSize: "11px", color: C.accent }}>LIVE</span>
+                <span style={{ ...mono, fontSize: "11px", color: C.textDim }}>· {item.viewers || "—"} watching</span>
+                <LiveBadgeNumber number={item.number} />
+              </div>
+            )}
+          </div>
+        </div>
+        <button onClick={onClose} style={{ color: C.textDim, background: "none", border: "none" }}><X size={20} /></button>
+      </div>
+
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "16px 24px 22px", background: "linear-gradient(0deg, rgba(0,0,0,0.85), transparent)" }}>
+        {item.live ? (
+          <div className="flex items-center gap-2" style={{ marginBottom: "12px" }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.accent, boxShadow: `0 0 6px ${C.accent}` }} />
+            <span style={{ ...mono, fontSize: "11px", color: C.textDim }}>BROADCASTING LIVE — SEEKING DISABLED</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3" style={{ marginBottom: "10px" }}>
+            <span style={{ ...mono, fontSize: "11px", color: C.textDim, width: "38px" }}>{fmtTime(current)}</span>
+            <input type="range" min={0} max={duration || 0} value={current} onChange={seek} style={{ flex: 1, accentColor: C.accent }} />
+            <span style={{ ...mono, fontSize: "11px", color: C.textDim, width: "38px" }}>{fmtTime(duration)}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {item.live && <button onClick={() => onSwitchChannel(-1)} style={{ color: C.text, background: "none", border: "none" }}><SkipBack size={18} /></button>}
+            <button onClick={togglePlay} style={{ color: "#000", background: C.text, border: "none", borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {isPlaying ? <Pause size={16} fill="#000" /> : <Play size={16} fill="#000" />}
+            </button>
+            {item.live && <button onClick={() => onSwitchChannel(1)} style={{ color: C.text, background: "none", border: "none" }}><SkipForward size={18} /></button>}
+            <button onClick={toggleMute} style={{ color: C.text, background: "none", border: "none" }}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+          </div>
+          <button onClick={toggleFullscreen} style={{ color: C.text, background: "none", border: "none" }}><Maximize2 size={18} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StreamingUI() {
+  const [channels, setChannels] = useState(defaultChannels);
+  const [playing, setPlaying] = useState(null);
+
+  useEffect(() => {
+    fetch(CHANNELS_URL)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data) && data.length) setChannels(data); })
+      .catch(() => {});
+  }, []);
+
+  const playVod = (title, meta) => setPlaying({ live: false, title, meta });
+  const playChannel = (channel) => setPlaying({ live: true, ...channel });
+  const switchChannel = (dir) => {
+    if (!playing?.live) return;
+    const idx = channels.findIndex((c) => c.number === playing.number);
+    const next = channels[(idx + dir + channels.length) % channels.length];
+    setPlaying({ live: true, ...next });
+  };
+
+  return (
+    <div style={{ ...body, background: C.bg, minHeight: "100vh", color: C.text }}>
+      {playing && <Player item={playing} onClose={() => setPlaying(null)} onSwitchChannel={switchChannel} />}
+
+      <div className="flex items-center justify-between px-6 py-4" style={{ position: "sticky", top: 0, zIndex: 20, background: "linear-gradient(180deg, #0B0B0E 60%, transparent)" }}>
+        <div className="flex items-center gap-8">
+          <div style={{ ...display, fontSize: "26px", color: C.accent }}>NOVASTREAM</div>
+          <div className="hidden md-flex gap-5" style={{ fontSize: "13.5px", color: C.textDim }}>
+            <span style={{ color: C.text }}>Home</span>
+            <span className="flex items-center gap-1"><Radio size={13} /> Live TV</span>
+            <span>Movies</span><span>Series</span><span>Kids</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-5" style={{ color: C.textDim }}>
+          <Search size={17} /><Bell size={17} />
+          <div style={{ width: 26, height: 26, borderRadius: "4px", background: gradientFor(2) }} />
+          <ChevronDown size={14} />
+        </div>
+      </div>
+
+      <div style={{ position: "relative", height: "62vh", minHeight: "360px", background: `linear-gradient(90deg, #0B0B0E 15%, transparent 65%), linear-gradient(0deg, #0B0B0E 5%, transparent 45%), ${gradientFor(4)}`, display: "flex", alignItems: "flex-end" }}>
+        <div style={{ padding: "0 24px 40px", maxWidth: "560px" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: "10px" }}>
+            <span style={{ ...mono, fontSize: "11px", color: C.gold, border: `1px solid ${C.gold}66`, padding: "2px 6px", borderRadius: "3px" }}>NOVASTREAM ORIGINAL</span>
+          </div>
+          <h1 style={{ ...display, fontSize: "56px", lineHeight: 0.95 }}>CRIMSON HORIZON</h1>
+          <div className="flex items-center gap-3" style={{ margin: "10px 0", color: C.textDim, fontSize: "13px" }}>
+            <span style={{ color: "#7CD98A" }}>98% Match</span><span>2026</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Star size={12} fill={C.gold} color={C.gold} /> 4.7</span>
+            <span>2 Seasons</span>
+          </div>
+          <p style={{ color: C.text, fontSize: "14.5px", lineHeight: 1.5, opacity: 0.9 }}>
+            A satellite engineer intercepts a signal that shouldn't exist — and has ninety-six hours to decide who else gets to hear it.
+          </p>
+          <div className="flex gap-3" style={{ marginTop: "20px" }}>
+            <button onClick={() => playVod("Crimson Horizon", "S2 · E4")} className="flex items-center gap-2" style={{ background: C.text, color: "#000", padding: "10px 22px", borderRadius: "4px", fontWeight: 700, fontSize: "14px" }}>
+              <Play size={16} fill="#000" /> Play
+            </button>
+            <button className="flex items-center gap-2" style={{ background: "#ffffff26", color: C.text, padding: "10px 22px", borderRadius: "4px", fontWeight: 600, fontSize: "14px" }}>
+              <Info size={16} /> More Info
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: "28px 20px 60px", marginTop: "-60px", position: "relative", zIndex: 10 }}>
+        <Row title="Continue Watching">
+          {continueWatching.map((s, i) => <PosterCard key={s.title} title={s.title} meta={s.tag} seed={i} progress={s.progress} onPlay={() => playVod(s.title, s.tag)} />)}
+        </Row>
+        <Row title="Live Now">
+          {channels.map((c, i) => <PosterCard key={c.name} title={c.name} meta={`${c.genre} · ${c.viewers} watching`} seed={i + 2} live number={c.number} onPlay={() => playChannel(c)} />)}
+        </Row>
+        <Row title="Trending in Movies & Series">
+          {trending.map((s, i) => <PosterCard key={s.title} title={s.title} meta={s.meta} seed={i + 1} onPlay={() => playVod(s.title, s.meta)} />)}
+        </Row>
+        <Row title="Kids Zone">
+          {kidsZone.map((s, i) => <PosterCard key={s.title} title={s.title} meta={s.meta} seed={i + 3} onPlay={() => playVod(s.title, s.meta)} />)}
+        </Row>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<StreamingUI />);
+</script>
+</body>
+</html>
